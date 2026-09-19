@@ -899,7 +899,7 @@ async function doCreateAuction(){
     type:"create",
     auction:{ type, name, desc, minBid: min, image: image || null, ivImage: ivImage || null, durMinutes: dur }
   });
-  if(!ok){ alert("Não foi possível criar o leilão. Erro: " + (data && data.error ? data.error : "desconhecido")); return; }
+  if(!ok){ alert("Não foi possível criar o leilão. Erro: " + (data && data.error ? data.error : "desconhecido") + (data && data.detail ? " — " + data.detail : "")); return; }
   sndCreate();
   closeOverlay();
   renderAuctions();
