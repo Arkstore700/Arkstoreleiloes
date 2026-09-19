@@ -352,7 +352,7 @@
   <div id="view-ranking" class="view">
     <div class="intro">
       <h2>Ranking</h2>
-      <p>Quem mais arrematou leilões por aqui. <span class="hint">(baseado nos leilões encerrados salvos neste navegador)</span></p>
+      <p>Quem mais arrematou leilões por aqui.</p>
     </div>
     <div class="rank-list" id="rankList"></div>
   </div>
@@ -395,7 +395,7 @@
   </div>
 </main>
 
-<footer onclick="footerSecretTap()">ARK Leilões — Leilões da ARK STORE. Dados salvos neste navegador.</footer>
+<footer onclick="footerSecretTap()">ARK Leilões — Leilões da ARK STORE.</footer>
 
 <div class="overlay" id="overlay" style="display:none;"></div>
 
@@ -408,8 +408,8 @@ const LS_AVATARS = "ark_avatars_v1"; // {discordId: foto de perfil personalizada
 const LS_SOUND = "ark_sound_v1";
 const SS_ADMIN = "ark_admin_session";
 
-let auctions = JSON.parse(localStorage.getItem(LS_AUCTIONS) || "[]");
-let banned = JSON.parse(localStorage.getItem(LS_BANNED) || "[]");     // [{discordId, label}]
+let auctions = [];  // vem do servidor (Supabase) via /api/state — compartilhado entre todo mundo
+let banned = [];    // [{discordId, label}] — idem
 let mcNames = JSON.parse(localStorage.getItem(LS_MCNAMES) || "{}");   // {discordId: minecraft}
 let avatars = JSON.parse(localStorage.getItem(LS_AVATARS) || "{}");   // {discordId: fotoDataUrl}
 let currentUser = null; // é preenchido via /api/me quando a página carrega (login real do Discord)
@@ -471,12 +471,25 @@ function toggleSound(){
   if(soundOn) sndClick();
 }
 
-function save(){
+// leilões/lances/banidos agora ficam no Supabase (servidor), não mais no localStorage.
+async function apiState(){
   try{
-    localStorage.setItem(LS_AUCTIONS, JSON.stringify(auctions));
-    localStorage.setItem(LS_BANNED, JSON.stringify(banned));
+    const res = await fetch("/api/state");
+    const data = await res.json();
+    if(data.auctions){ auctions = data.auctions; banned = data.banned; }
+  }catch(e){ /* mantém os dados que já estavam carregados */ }
+}
+async function apiAction(payload){
+  if(isAdmin) payload.adminCode = ADMIN_PASSWORD;
+  try{
+    const res = await fetch("/api/action", {
+      method:"POST", headers:{"Content-Type":"application/json"}, body: JSON.stringify(payload)
+    });
+    const data = await res.json().catch(() => ({}));
+    if(data.auctions){ auctions = data.auctions; banned = data.banned; }
+    return { ok: res.ok, data };
   }catch(e){
-    alert("Não foi possível salvar (armazenamento cheio). Tente usar imagens menores.");
+    return { ok:false, data:{ error:"network" } };
   }
 }
 
@@ -882,18 +895,11 @@ async function doCreateAuction(){
     return;
   }
 
-  const now = Date.now();
-  auctions.unshift({
-    id: "a_" + now + "_" + Math.floor(Math.random()*1000),
-    type, name, desc, minBid: min,
-    image: image || null,
-    ivImage: ivImage || null,
-    bids: [],
-    createdAt: now,
-    endsAt: now + dur*60000,
-    status: "active"
+  const { ok, data } = await apiAction({
+    type:"create",
+    auction:{ type, name, desc, minBid: min, image: image || null, ivImage: ivImage || null, durMinutes: dur }
   });
-  save();
+  if(!ok){ alert("Não foi possível criar o leilão. Tente de novo."); return; }
   sndCreate();
   closeOverlay();
   renderAuctions();
@@ -908,18 +914,18 @@ function banListModal(){
     <div class="modal-actions"><button class="btn-ghost" onclick="closeOverlay()">Fechar</button></div>`);
 }
 
-function unban(discordId){
-  banned = banned.filter(b => b.discordId !== discordId);
-  save();
+async function unban(discordId){
+  const { ok } = await apiAction({ type:"unban", discordId });
+  if(!ok){ alert("Não foi possível desbanir."); return; }
   sndClick();
   renderAdminActions();
   banListModal();
 }
 
 function banUser(discordId, label){
-  askConfirm(`Banir "${label}" por lance anormal? Ele não poderá mais dar lances.`, () => {
-    if(!isBanned(discordId)) banned.push({discordId, label});
-    save();
+  askConfirm(`Banir "${label}" por lance anormal? Ele não poderá mais dar lances.`, async () => {
+    const { ok } = await apiAction({ type:"ban", discordId, label });
+    if(!ok){ alert("Não foi possível banir."); return; }
     sndBan();
     renderAdminActions();
     renderAuctions();
@@ -929,18 +935,18 @@ function banUser(discordId, label){
 function removeBid(auctionId, bidIndex){
   const a = auctions.find(x => x.id === auctionId);
   if(!a) return;
-  askConfirm("Remover este lance considerado anormal?", () => {
-    a.bids.splice(bidIndex, 1);
-    save();
+  askConfirm("Remover este lance considerado anormal?", async () => {
+    const { ok } = await apiAction({ type:"removeBid", auctionId, bidIndex });
+    if(!ok){ alert("Não foi possível remover o lance."); return; }
     sndClick();
     renderAuctions();
   });
 }
 
 function deleteAuction(auctionId){
-  askConfirm("Excluir este leilão? Essa ação não pode ser desfeita.", () => {
-    auctions = auctions.filter(x => x.id !== auctionId);
-    save();
+  askConfirm("Excluir este leilão? Essa ação não pode ser desfeita.", async () => {
+    const { ok } = await apiAction({ type:"delete", auctionId });
+    if(!ok){ alert("Não foi possível excluir o leilão."); return; }
     sndClick();
     renderAuctions();
   });
@@ -949,10 +955,9 @@ function deleteAuction(auctionId){
 function endAuctionNow(auctionId){
   const a = auctions.find(x => x.id === auctionId);
   if(!a) return;
-  askConfirm("Finalizar este leilão agora? O maior lance atual vence.", () => {
-    a.status = "ended";
-    a.endsAt = Date.now();
-    save();
+  askConfirm("Finalizar este leilão agora? O maior lance atual vence.", async () => {
+    const { ok } = await apiAction({ type:"finalize", auctionId });
+    if(!ok){ alert("Não foi possível finalizar o leilão."); return; }
     sndClick();
     renderAuctions();
   });
@@ -962,7 +967,7 @@ const MIN_INCREMENT = 100000;      // regra 3: aumento mínimo de 100k
 const ANTI_SNIPE_WINDOW = 5*60000;  // regra 2: janela de prorrogação (5 min)
 const ANTI_SNIPE_EXTEND = 5*60000;  // regra 2: tempo adicionado (5 min)
 
-function placeBid(auctionId){
+async function placeBid(auctionId){
   if(!currentUser){ window.location.href = "/api/discord-login"; return; }
   if(!currentUser.minecraft){ askMinecraftName(); return; }
   if(isBanned(currentUser.discordId)){ sndBidFail(); alert("Você está banido e não pode dar lances."); return; }
@@ -982,13 +987,20 @@ function placeBid(auctionId){
       : `O primeiro lance precisa ser de pelo menos ${fmtMoney(minAllowed)}.`);
     return;
   }
-  a.bids.unshift({minecraft: currentUser.minecraft, discord: currentUser.discord, discordId: currentUser.discordId, value: val, time: now});
-  // regra 2: lance nos últimos 5 minutos prorroga o leilão por mais 5 minutos
-  if(a.endsAt - now <= ANTI_SNIPE_WINDOW){
-    a.endsAt = now + ANTI_SNIPE_EXTEND;
-    a.extended = true;
+  // salva no servidor (Supabase) — o backend confere de novo tudo isso
+  // (login, banimento, valor mínimo) antes de gravar, então fica seguro
+  // mesmo que o navegador de alguém tente burlar essa checagem.
+  const { ok, data } = await apiAction({ type:"bid", auctionId, minecraft: currentUser.minecraft, value: val });
+  if(!ok){
+    sndBidFail();
+    if(data.error === "banned") alert("Você está banido e não pode dar lances.");
+    else if(data.error === "ended") alert("Este leilão já foi encerrado.");
+    else if(data.error === "bid_too_low") alert(`Alguém deu um lance mais alto antes do seu. Mínimo agora: ${fmtMoney(data.minAllowed)}.`);
+    else if(data.error === "not_logged_in") window.location.href = "/api/discord-login";
+    else alert("Não foi possível registrar seu lance. Tente de novo.");
+    renderAuctions();
+    return;
   }
-  save();
   sndBidOk();
   input.value = "";
   renderAuctions();
@@ -1000,12 +1012,12 @@ function escapeHtml(s){
 function escapeAttr(s){ return String(s).replace(/'/g, "\\'"); }
 
 function sweepEnded(){
+  // só ajusta a exibição local (deixa cinza, esconde o campo de lance);
+  // quem realmente encerra o leilão no banco é o admin, com "Finalizar leilão"
   const now = Date.now();
-  let changed = false;
   auctions.forEach(a => {
-    if(a.status === "active" && now >= a.endsAt){ a.status = "ended"; changed = true; }
+    if(a.status === "active" && now >= a.endsAt){ a.status = "ended"; }
   });
-  if(changed) save();
 }
 
 function renderAuctions(){
@@ -1115,9 +1127,26 @@ function tick(){
 
 document.getElementById("soundToggle").textContent = soundOn ? "🔊" : "🔇";
 renderAdminActions();
-renderAuctions();
+
+// carrega os leilões/banidos do Supabase (compartilhado com todo mundo) e então renderiza
+apiState().then(renderAuctions);
 loadSession(); // confere no backend quem está logado com o Discord
 setInterval(tick, 1000);
+
+// a cada poucos segundos busca de novo no servidor, pra ver lances/leilões
+// que outras pessoas fizeram nesse meio tempo — preservando o que a própria
+// pessoa estiver digitando num campo de lance no momento do refresh.
+setInterval(async () => {
+  const active = document.activeElement;
+  const focusedId = (active && active.tagName === "INPUT" && active.id.startsWith("bid_")) ? active.id : null;
+  const focusedVal = focusedId ? active.value : null;
+  await apiState();
+  renderAuctions();
+  if(focusedId){
+    const restored = document.getElementById(focusedId);
+    if(restored){ restored.value = focusedVal; restored.focus(); }
+  }
+}, 4000);
 </script>
 </body>
 </html>
