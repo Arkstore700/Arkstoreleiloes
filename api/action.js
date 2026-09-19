@@ -79,7 +79,7 @@ export default async function handler(req, res) {
   try {
     if (type === "bid") {
       if (!sessionUser) return res.status(401).json({ error: "not_logged_in" });
-      const { auctionId, minecraft, value } = body;
+      const { auctionId, minecraft, value, avatar } = body;
       if (!minecraft) return res.status(400).json({ error: "no_minecraft_name" });
 
       const bannedRes = await fetch(
@@ -110,6 +110,7 @@ export default async function handler(req, res) {
         minecraft,
         discord: sessionUser.username,
         discordId: sessionUser.id,
+        avatar: avatar || null,
         value: val,
         time: Date.now(),
       });
