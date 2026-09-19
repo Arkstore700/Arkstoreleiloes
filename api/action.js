@@ -198,6 +198,6 @@ export default async function handler(req, res) {
       banned: bRows2.map((r) => ({ discordId: r.discord_id, label: r.label })),
     });
   } catch (e) {
-    res.status(500).json({ error: "server_error" });
+    res.status(500).json({ error: "server_error", detail: String(e && e.message || e) });
   }
 }
