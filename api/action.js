@@ -56,6 +56,18 @@ export default async function handler(req, res) {
   const key = process.env.SUPABASE_SERVICE_ROLE_KEY;
   const headers = { apikey: key, Authorization: `Bearer ${key}`, "Content-Type": "application/json" };
 
+  if (!base || !key) {
+    res.status(500).json({
+      error: "missing_env",
+      detail: `SUPABASE_URL presente: ${!!base} / SUPABASE_SERVICE_ROLE_KEY presente: ${!!key}`,
+    });
+    return;
+  }
+  if (!process.env.ADMIN_CODE) {
+    res.status(500).json({ error: "missing_env", detail: "ADMIN_CODE não está configurado na Vercel." });
+    return;
+  }
+
   const cookieHeader = req.headers.cookie || "";
   const cookieMatch = cookieHeader.match(/ark_session=([^;]+)/);
   const sessionUser = cookieMatch ? verifySession(cookieMatch[1]) : null;
@@ -135,11 +147,15 @@ export default async function handler(req, res) {
         status: "active",
         extended: false,
       };
-      await fetch(`${base}/rest/v1/auctions`, {
+      const insertRes = await fetch(`${base}/rest/v1/auctions`, {
         method: "POST",
         headers: { ...headers, Prefer: "return=minimal" },
         body: JSON.stringify([row]),
       });
+      if (!insertRes.ok) {
+        const errText = await insertRes.text();
+        return res.status(500).json({ error: "supabase_insert_failed", detail: `HTTP ${insertRes.status}: ${errText}` });
+      }
     } else if (type === "finalize") {
       if (!isAdmin) return res.status(403).json({ error: "not_admin" });
       await fetch(`${base}/rest/v1/auctions?id=eq.${encodeURIComponent(body.auctionId)}`, {
