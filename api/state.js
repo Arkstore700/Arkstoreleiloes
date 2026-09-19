@@ -25,17 +25,30 @@ export default async function handler(req, res) {
   const headers = { apikey: key, Authorization: `Bearer ${key}` };
 
   try {
-    const [aRes, bRes] = await Promise.all([
+    const [aRes, bRes, mRes] = await Promise.all([
       fetch(`${base}/rest/v1/auctions?select=*&order=created_at.desc`, { headers }),
       fetch(`${base}/rest/v1/banned?select=*`, { headers }),
+      fetch(`${base}/rest/v1/messages?select=*&order=created_at.desc&limit=200`, { headers }),
     ]);
-    if (!aRes.ok || !bRes.ok) throw new Error("supabase_error");
+    if (!aRes.ok || !bRes.ok || !mRes.ok) throw new Error("supabase_error");
     const aRows = await aRes.json();
     const bRows = await bRes.json();
+    const mRows = await mRes.json();
 
     res.status(200).json({
       auctions: aRows.map(mapAuction),
       banned: bRows.map((r) => ({ discordId: r.discord_id, label: r.label })),
+      messages: mRows
+        .map((r) => ({
+          id: r.id,
+          auctionId: r.auction_id,
+          discordId: r.discord_id,
+          minecraft: r.minecraft,
+          avatar: r.avatar,
+          message: r.message,
+          createdAt: Number(r.created_at),
+        }))
+        .reverse(), // volta pra ordem cronológica (mais antiga primeiro)
     });
   } catch (e) {
     res.status(500).json({ error: "Erro ao buscar dados do Supabase." });

@@ -198,21 +198,74 @@ export default async function handler(req, res) {
         method: "DELETE",
         headers,
       });
+    } else if (type === "chat") {
+      if (!sessionUser) return res.status(401).json({ error: "not_logged_in" });
+      const bannedRes = await fetch(
+        `${base}/rest/v1/banned?discord_id=eq.${encodeURIComponent(sessionUser.id)}&select=discord_id`,
+        { headers }
+      );
+      const bannedRows = await bannedRes.json();
+      if (bannedRows.length) return res.status(403).json({ error: "banned" });
+
+      const { auctionId, minecraft, avatar, message } = body;
+      if (!auctionId) return res.status(400).json({ error: "no_auction_id" });
+      if (!minecraft) return res.status(400).json({ error: "no_minecraft_name" });
+      const text = String(message || "").trim().slice(0, 300);
+      if (!text) return res.status(400).json({ error: "empty_message" });
+
+      const now = Date.now();
+      const row = {
+        id: "m_" + now + "_" + Math.floor(Math.random() * 1000),
+        auction_id: auctionId,
+        discord_id: sessionUser.id,
+        minecraft,
+        avatar: avatar || null,
+        message: text,
+        created_at: now,
+      };
+      const insertRes = await fetch(`${base}/rest/v1/messages`, {
+        method: "POST",
+        headers: { ...headers, Prefer: "return=minimal" },
+        body: JSON.stringify([row]),
+      });
+      if (!insertRes.ok) {
+        const errText = await insertRes.text();
+        return res.status(500).json({ error: "supabase_insert_failed", detail: `HTTP ${insertRes.status}: ${errText}` });
+      }
+    } else if (type === "deleteMessage") {
+      if (!isAdmin) return res.status(403).json({ error: "not_admin" });
+      await fetch(`${base}/rest/v1/messages?id=eq.${encodeURIComponent(body.messageId)}`, {
+        method: "DELETE",
+        headers,
+      });
     } else {
       return res.status(400).json({ error: "unknown_type" });
     }
 
     // devolve o estado já atualizado, pra sincronizar na hora sem esperar o próximo polling
-    const [aRes2, bRes2] = await Promise.all([
+    const [aRes2, bRes2, mRes2] = await Promise.all([
       fetch(`${base}/rest/v1/auctions?select=*&order=created_at.desc`, { headers }),
       fetch(`${base}/rest/v1/banned?select=*`, { headers }),
+      fetch(`${base}/rest/v1/messages?select=*&order=created_at.desc&limit=200`, { headers }),
     ]);
     const aRows2 = await aRes2.json();
     const bRows2 = await bRes2.json();
+    const mRows2 = await mRes2.json();
     res.status(200).json({
       ok: true,
       auctions: aRows2.map(mapAuction),
       banned: bRows2.map((r) => ({ discordId: r.discord_id, label: r.label })),
+      messages: mRows2
+        .map((r) => ({
+          id: r.id,
+          auctionId: r.auction_id,
+          discordId: r.discord_id,
+          minecraft: r.minecraft,
+          avatar: r.avatar,
+          message: r.message,
+          createdAt: Number(r.created_at),
+        }))
+        .reverse(),
     });
   } catch (e) {
     res.status(500).json({ error: "server_error", detail: String(e && e.message || e) });
