@@ -139,7 +139,9 @@
     border-top:1px solid var(--line);padding-top:10px;margin-top:2px;}
   .stat-row .label{font-size:10.5px;color:var(--muted);text-transform:uppercase;letter-spacing:0.7px;}
   .stat-row .value{font-size:18px;font-weight:700;color:var(--green);text-shadow:0 0 8px var(--green-glow);}
-  .stat-row .leader{font-size:11.5px;color:var(--cream);margin-top:2px;}
+  .stat-row .leader{display:flex;align-items:center;gap:5px;font-size:11.5px;color:var(--cream);margin-top:2px;}
+  .leader-avatar{width:16px;height:16px;border-radius:50%;object-fit:cover;flex-shrink:0;
+    border:1px solid var(--green-dim);}
   .timer{font-size:12.5px;color:var(--muted);font-variant-numeric:tabular-nums;}
   .timer.urgent{color:#ff6b5a;font-weight:700;}
   .bid-row{display:flex;gap:8px;margin-top:2px;}
@@ -990,7 +992,7 @@ async function placeBid(auctionId){
   // salva no servidor (Supabase) — o backend confere de novo tudo isso
   // (login, banimento, valor mínimo) antes de gravar, então fica seguro
   // mesmo que o navegador de alguém tente burlar essa checagem.
-  const { ok, data } = await apiAction({ type:"bid", auctionId, minecraft: currentUser.minecraft, value: val });
+  const { ok, data } = await apiAction({ type:"bid", auctionId, minecraft: currentUser.minecraft, value: val, avatar: currentUser.avatar || null });
   if(!ok){
     sndBidFail();
     if(data.error === "banned") alert("Você está banido e não pode dar lances.");
@@ -1046,7 +1048,7 @@ function renderAuctions(){
 
     const historyRows = a.bids.slice(0,5).map((b, i) => `
       <div class="h-row ${i===0 ? 'top' : ''}">
-        <span><span class="rank-chip">${i+1}</span>${escapeHtml(b.minecraft)} — ${fmtMoney(b.value)}</span>
+        <span style="display:flex;align-items:center;gap:5px;">${b.avatar ? `<img class="leader-avatar" src="${b.avatar}">` : ""}<span class="rank-chip">${i+1}</span>${escapeHtml(b.minecraft)} — ${fmtMoney(b.value)}</span>
         ${isAdmin ? `<span style="display:flex;gap:4px;">
             <button class="mini" onclick="removeBid('${a.id}', ${i})">remover</button>
             <button class="mini" onclick="banUser('${escapeAttr(b.discordId)}', '${escapeAttr(b.minecraft)}')">banir</button>
@@ -1067,7 +1069,7 @@ function renderAuctions(){
             <div>
               <div class="label">${top ? `Lance atual · ${a.bids.length} lance${a.bids.length === 1 ? "" : "s"}` : "Lance mínimo"}</div>
               <div class="value">${fmtMoney(currentValue)}</div>
-              ${top ? `<div class="leader">👑 ${escapeHtml(top.minecraft)}</div>` : ""}
+              ${top ? `<div class="leader">${top.avatar ? `<img class="leader-avatar" src="${top.avatar}">` : ""}👑 ${escapeHtml(top.minecraft)}</div>` : ""}
             </div>
             <div class="timer ${urgent ? 'urgent' : ''}" id="timer_${a.id}">${ended ? "Encerrado" : fmtTimeLeft(timeLeft) + (a.extended ? " ⏱ prorrogado" : "")}</div>
           </div>
@@ -1136,11 +1138,15 @@ setInterval(tick, 1000);
 // a cada poucos segundos busca de novo no servidor, pra ver lances/leilões
 // que outras pessoas fizeram nesse meio tempo — preservando o que a própria
 // pessoa estiver digitando num campo de lance no momento do refresh.
+let lastStateSnapshot = "";
 setInterval(async () => {
   const active = document.activeElement;
   const focusedId = (active && active.tagName === "INPUT" && active.id.startsWith("bid_")) ? active.id : null;
   const focusedVal = focusedId ? active.value : null;
   await apiState();
+  const snapshot = JSON.stringify({auctions, banned});
+  if(snapshot === lastStateSnapshot) return; // nada mudou, não redesenha (evita piscar à toa)
+  lastStateSnapshot = snapshot;
   renderAuctions();
   if(focusedId){
     const restored = document.getElementById(focusedId);
