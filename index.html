@@ -50,7 +50,7 @@
   .pill b{color:var(--cream);}
   button{font-family:inherit;cursor:pointer;border-radius:0;border:1px solid transparent;
     padding:9px 16px;font-size:14px;font-weight:700;letter-spacing:0.3px;
-    transition:transform .08s ease, filter .15s ease, box-shadow .15s ease;}
+    transition:filter .15s ease, box-shadow .15s ease, background-color .15s ease, border-color .15s ease;}
   button:active{transform:scale(0.96);}
   .btn-primary{background:var(--green);color:#04180a;box-shadow:0 0 12px var(--green-glow);}
   .btn-primary:hover{filter:brightness(1.12);}
@@ -105,7 +105,8 @@
   .card{background:linear-gradient(180deg, var(--surface), #060906);
     border:1px solid var(--line);border-radius:0;
     padding:0;display:flex;flex-direction:column;gap:0;position:relative;overflow:hidden;
-    transition:border-color .15s ease, box-shadow .15s ease, transform .1s ease;
+    transition:border-color .2s ease, box-shadow .2s ease, transform .2s ease;
+    animation:fadeInUp .35s ease both;
     clip-path:polygon(0 10px,10px 0,100% 0,100% 100%,0 100%);}
   .card::after{content:"";position:absolute;top:0;left:0;right:0;height:3px;
     background:var(--green);z-index:3;}
@@ -147,10 +148,13 @@
   .bid-row input:focus{outline:none;border-color:var(--green-dim);}
   .history{margin-top:0;font-size:12px;color:var(--muted);display:flex;
     flex-direction:column;gap:4px;max-height:90px;overflow-y:auto;}
-  .history .h-row{display:flex;justify-content:space-between;align-items:center;gap:6px;}
+  .history .h-row{display:flex;justify-content:space-between;align-items:center;gap:6px;
+    animation:fadeInUp .25s ease both;transition:background-color .15s ease;padding:2px 4px;}
+  .history .h-row:hover{background:rgba(255,255,255,0.03);}
   .history .h-row.top{color:var(--green);}
   .history button.mini{padding:1px 6px;font-size:10px;background:transparent;
-    border:1px solid var(--line);color:var(--muted);border-radius:0;}
+    border:1px solid var(--line);color:var(--muted);border-radius:0;transition:border-color .15s ease, color .15s ease;}
+  .history button.mini:hover{border-color:var(--green-dim);color:var(--green);}
   .rank-chip{display:inline-flex;align-items:center;justify-content:center;
     width:15px;height:15px;font-size:9px;font-weight:700;background:var(--surface-2);
     color:var(--muted);border:1px solid var(--line);margin-right:6px;flex-shrink:0;}
@@ -175,7 +179,10 @@
   .modal label{font-size:12px;color:var(--muted);display:flex;flex-direction:column;gap:5px;}
   .modal input,.modal select,.modal textarea{background:#000;
     border:1px solid var(--line);color:var(--cream);border-radius:0;
-    padding:9px 10px;font-size:14px;font-family:inherit;}
+    padding:9px 10px;font-size:14px;font-family:inherit;
+    transition:border-color .18s ease, box-shadow .18s ease;}
+  .modal input:focus,.modal select:focus,.modal textarea:focus{
+    outline:none;border-color:var(--green-dim);box-shadow:0 0 0 3px rgba(61,255,110,0.12);}
   .modal input[type=file]{padding:8px;font-size:12px;color:var(--muted);
     border-style:dashed;}
   .modal input[type=file]::file-selector-button{
@@ -220,11 +227,11 @@
     border-bottom:1px solid var(--line);overflow-x:auto;}
   .tab{background:transparent;border:none;border-bottom:2px solid transparent;color:var(--muted);
     padding:14px 16px;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:1px;
-    white-space:nowrap;border-radius:0;}
+    white-space:nowrap;border-radius:0;transition:color .2s ease, border-color .2s ease, text-shadow .2s ease;}
   .tab:hover{color:var(--cream);}
   .tab.active{color:var(--green);border-bottom-color:var(--green);text-shadow:0 0 8px var(--green-glow);}
   .view{display:none;}
-  .view.active{display:block;}
+  .view.active{display:block;animation:fadeInUp .3s ease both;}
 
   .btn-discord{background:#5865F2;color:#fff;display:inline-flex;align-items:center;gap:8px;
     text-decoration:none;padding:10px 18px;font-weight:700;font-size:13px;letter-spacing:0.3px;
@@ -234,7 +241,9 @@
 
   .rank-list{display:flex;flex-direction:column;gap:8px;max-width:640px;}
   .rank-item{display:flex;align-items:center;gap:14px;background:var(--surface);
-    border:1px solid var(--line);padding:12px 16px;}
+    border:1px solid var(--line);padding:12px 16px;animation:fadeInUp .3s ease both;
+    transition:transform .15s ease, border-color .15s ease, box-shadow .15s ease;}
+  .rank-item:hover{transform:translateX(4px);border-color:var(--green-dim);}
   .rank-item .pos{font-family:"Press Start 2P",monospace;font-size:13px;color:var(--muted);width:28px;flex-shrink:0;}
   .rank-item:nth-child(1) .pos{color:var(--gold);}
   .rank-item:nth-child(2) .pos{color:#cfd8dc;}
@@ -279,6 +288,7 @@
   }
   .click-pulse{animation:clickPop 0.26s ease;}
   @keyframes modalIn{from{opacity:0;transform:scale(0.96) translateY(8px);}to{opacity:1;transform:scale(1) translateY(0);}}
+  @keyframes fadeInUp{from{opacity:0;transform:translateY(10px);}to{opacity:1;transform:translateY(0);}}
   .modal{animation:modalIn 0.18s ease;}
 
   footer{text-align:center;padding:30px 20px;color:var(--muted);font-size:12px;position:relative;z-index:2;}
@@ -420,7 +430,14 @@ function beep(freq, dur, type, delay, vol){
 // sons mais suaves (onda triangular/senoidal, poucas notas curtas) em vez do bipe 8-bit repetitivo de antes
 function sndClick(){ beep(600, 0.03, "sine", 0, 0.03); }
 function sndLogin(){ beep(520, 0.08, "triangle", 0, 0.045); beep(740, 0.1, "triangle", 0.06, 0.04); }
-function sndBidOk(){ beep(700, 0.07, "triangle", 0, 0.05); beep(950, 0.09, "triangle", 0.05, 0.045); }
+function sndBidOk(){
+  // "cha-ching" de dinheiro: dois cliques metálicos curtos + um arpejo de moeda subindo
+  beep(1800, 0.02, "square", 0, 0.035);
+  beep(2200, 0.02, "square", 0.03, 0.03);
+  beep(880, 0.09, "sine", 0.05, 0.05);
+  beep(1318, 0.09, "sine", 0.1, 0.05);
+  beep(1760, 0.14, "sine", 0.15, 0.055);
+}
 function sndBidFail(){ beep(240, 0.1, "triangle", 0, 0.04); }
 function sndCreate(){ beep(600, 0.06, "triangle", 0, 0.045); beep(880, 0.1, "triangle", 0.06, 0.04); }
 function sndBan(){ beep(260, 0.08, "triangle", 0, 0.045); beep(170, 0.14, "triangle", 0.07, 0.04); }
